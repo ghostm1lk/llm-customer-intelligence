@@ -1,0 +1,46 @@
+{
+  "output_quality": {
+    "messages": 60,
+    "errors": 0,
+    "intent_exact_match": "43/60 (71.7%)",
+    "intent_precision": 0.827,
+    "intent_recall": 0.893,
+    "intent_f1": 0.859,
+    "priority_accuracy": "47/60 (78.3%)",
+    "routing_accuracy": "57/60 (95.0%)",
+    "action_accuracy": "55/60 (91.7%)",
+    "complete_outputs": "60/60 (100.0%)",
+    "replies_citing_a_source": "51/51 (100.0%)",
+    "replies_with_no_invented_numbers": "51/51 (100.0%)",
+    "avg_latency_seconds": 10.21,
+    "max_latency_seconds": 12.98
+  },
+  "retrieval": {
+    "messages_with_relevant_doc": 47,
+    "hit_at_1": "31/47 (66.0%)",
+    "hit_at_3": "39/47 (83.0%)",
+    "hit_at_3_requires_retrieval_only": "20/24 (83.3%)"
+  },
+  "consistency": {
+    "runs_per_message": 3,
+    "stable_messages": "10/10 (100.0%)",
+    "unstable_ids": []
+  },
+  "robustness": {
+    "reworded_cases_passed": "7/8 (87.5%)",
+    "failures": [
+      {
+        "original_id": "M045",
+        "reworded": "40 minutes on hold. Your support is awful.",
+        "expected": [
+          "Support Team",
+          "Respond"
+        ],
+        "got": [
+          "Support Team",
+          "Escalate"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+# Virtual environment (recreate with: python3 -m venv .venv && pip install -r requirements.txt)
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Vector database (rebuilt automatically from data/kb/ by retriever.py)
+chroma_db/
+
+# Request logs (can contain customer messages - never commit these)
+logs/
+
+# macOS / editor files
+.DS_Store
+.vscode/

@@ -7,3 +7,7 @@ pyyaml==6.0.3
 chromadb==1.5.9
 fastapi==0.141.1
 uvicorn==0.54.0
+
+# Hosted demo mode (LLM_PROVIDER=groq)
+groq==1.7.0
+fastembed==0.8.1

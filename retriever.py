@@ -2,29 +2,40 @@
 retriever.py - the Knowledge Layer (RAG retrieval).
 
     1. Splits every policy document in data/kb/ into small chunks.
-    2. Turns each chunk into an embedding (a list of numbers that captures its meaning)
-       using the nomic-embed-text model in Ollama.
-    3. Stores the chunks + embeddings in a Chroma vector database (folder: chroma_db/).
-    4. For a customer message, finds the chunks whose meaning is closest.
+    2. Turns each chunk into an embedding (a list of numbers that captures its meaning).
+    3. For a customer message, finds the chunks whose meaning is closest.
 
-Before running:
-    ollama pull nomic-embed-text
-    pip install chromadb
+Two backends, chosen with the same LLM_PROVIDER setting as llm.py:
 
-Rebuild the database and run the self-check (do this whenever data/kb/ changes):
+    LLM_PROVIDER=ollama (default)  nomic-embed-text in Ollama + Chroma vector database (folder chroma_db/)
+    LLM_PROVIDER=groq              bge-small-en-v1.5 running inside this app (fastembed, CPU only)
+                                   + a plain in-memory search. Groq has no embedding models, and
+                                   71 chunks do not need a database; this keeps memory low on Render.
+
+Before running (ollama):  ollama pull nomic-embed-text
+Before running (groq):    nothing - the small model downloads automatically the first time
+
+Rebuild the index and run the self-check (do this whenever data/kb/ changes):
     python retriever.py
 """
 
 import os
 
-import chromadb
-import ollama
-
 
 KB_DIR = "data/kb"
-DB_DIR = "chroma_db"
-COLLECTION_NAME = "policies"
-EMBED_MODEL = "nomic-embed-text"
+PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
+
+if PROVIDER == "groq":
+    import numpy
+    from fastembed import TextEmbedding
+    EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+    MODEL_CACHE_DIR = os.getenv("FASTEMBED_CACHE", "models_cache")
+else:
+    import chromadb
+    import ollama
+    EMBED_MODEL = "nomic-embed-text"
+    DB_DIR = "chroma_db"
+    COLLECTION_NAME = "policies"
 
 
 def load_chunks():
@@ -52,6 +63,13 @@ def load_chunks():
     return chunks
 
 
+def get_distance(item):
+    """Used for sorting results: smaller distance = more similar."""
+    return item["distance"]
+
+
+# ================================================================ local: Ollama + Chroma
+
 def embed(texts):
     """Turn a list of texts into a list of embeddings (one list of numbers per text)."""
     response = ollama.embed(model=EMBED_MODEL, input=texts)
@@ -68,7 +86,7 @@ def get_collection():
     return collection
 
 
-def build_index():
+def build_chroma_index():
     """Delete the old database contents and rebuild them from data/kb/."""
     client = chromadb.PersistentClient(path=DB_DIR)
     existing_names = []
@@ -99,14 +117,14 @@ def build_index():
         embeddings=embed(texts_to_embed),
         metadatas=metadatas,
     )
-    print("Indexed", len(chunks), "chunks from", KB_DIR)
+    print("Indexed", len(chunks), "chunks from", KB_DIR, "into Chroma")
 
 
-def retrieve(query, k=3):
-    """Return the k chunks most similar to the query, best match first."""
+def retrieve_chroma(query, k):
+    """Return the k chunks most similar to the query, using Chroma."""
     collection = get_collection()
     if collection.count() == 0:
-        build_index()
+        build_chroma_index()
         collection = get_collection()
 
     # nomic-embed-text expects this prefix on search queries.
@@ -125,7 +143,88 @@ def retrieve(query, k=3):
     return found
 
 
+# ================================================================ hosted: fastembed, in memory
+
+# Filled the first time they are needed, then reused for every request.
+embedder = None
+memory_index = None
+
+
+def get_embedder():
+    """Load the small embedding model once (downloads ~130 MB the very first time)."""
+    global embedder  # "global" = change the variable defined outside this function
+    if embedder is None:
+        embedder = TextEmbedding(model_name=EMBED_MODEL, cache_dir=MODEL_CACHE_DIR)
+    return embedder
+
+
+def build_memory_index():
+    """Embed every chunk once and keep the vectors in memory."""
+    global memory_index
+    chunks = load_chunks()
+
+    texts = []
+    for chunk in chunks:
+        texts.append(chunk["text"])
+
+    # passage_embed = embeddings for stored documents (the model handles any prefixes itself).
+    vectors = list(get_embedder().passage_embed(texts))
+
+    memory_index = []
+    for index in range(len(chunks)):
+        memory_index.append({
+            "text": chunks[index]["text"],
+            "source": chunks[index]["source"],
+            "vector": vectors[index],
+        })
+    print("Indexed", len(memory_index), "chunks from", KB_DIR, "in memory")
+
+
+def cosine_distance(vector_a, vector_b):
+    """0 = same direction (same meaning), up to 2 = opposite. Same scale as Chroma's cosine distance."""
+    similarity = numpy.dot(vector_a, vector_b) / (numpy.linalg.norm(vector_a) * numpy.linalg.norm(vector_b))
+    return 1 - float(similarity)
+
+
+def retrieve_memory(query, k):
+    """Return the k chunks most similar to the query, by comparing against every chunk."""
+    if memory_index is None:
+        build_memory_index()
+
+    query_vector = list(get_embedder().query_embed([query]))[0]
+
+    scored = []
+    for item in memory_index:
+        scored.append({
+            "text": item["text"],
+            "source": item["source"],
+            "distance": cosine_distance(query_vector, item["vector"]),
+        })
+
+    # Sort from most to least similar and keep the first k.
+    scored = sorted(scored, key=get_distance)
+    return scored[:k]
+
+
+# ================================================================ the functions other files use
+
+def build_index():
+    """(Re)build the search index for the active backend."""
+    if PROVIDER == "groq":
+        build_memory_index()
+    else:
+        build_chroma_index()
+
+
+def retrieve(query, k=3):
+    """Return the k chunks most similar to the query, best match first."""
+    if PROVIDER == "groq":
+        return retrieve_memory(query, k)
+    return retrieve_chroma(query, k)
+
+
 if __name__ == "__main__":
+    print("Provider:", PROVIDER, "| Embedding model:", EMBED_MODEL)
     build_index()
 
     query = "I was charged twice for the same transaction"

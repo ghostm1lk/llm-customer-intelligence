@@ -1,31 +1,86 @@
 """
-llm.py - talks to the local Qwen model running in Ollama.
+llm.py - talks to the language model. Two backends, chosen with the LLM_PROVIDER setting:
 
-Before running:
-    1. Ollama is installed and running  (ollama serve)
-    2. The model is downloaded          (ollama pull qwen3.5:4b)
-    3. pip install ollama pydantic pyyaml
+    LLM_PROVIDER=ollama (default)  local Qwen3.5-4B in Ollama - no data leaves the machine
+    LLM_PROVIDER=groq              hosted model on Groq's API - used for the public demo
+
+Before running (ollama):  ollama pull qwen3.5:4b
+Before running (groq):    export LLM_PROVIDER=groq  and  export GROQ_API_KEY=...
 
 Run the self-check:
     python llm.py
 """
 
+import os
 from typing import List, Literal
 
-import ollama
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
-MODEL_NAME = "qwen3.5:4b"
+# Read the settings from environment variables (outside the code), with safe defaults.
+PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
+
+if PROVIDER == "groq":
+    from groq import Groq
+    MODEL_NAME = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    groq_client = Groq()  # reads GROQ_API_KEY from the environment; fails clearly if it is missing
+elif PROVIDER == "ollama":
+    import ollama
+    MODEL_NAME = "qwen3.5:4b"
+else:
+    raise ValueError("LLM_PROVIDER must be 'ollama' or 'groq', not: " + PROVIDER)
 
 
 # This class describes the exact JSON shape we want back from the model.
-# Pydantic turns it into a JSON schema, and Ollama forces the model to follow it.
+# Pydantic turns it into a JSON schema, and the model is forced to follow it.
 class Extraction(BaseModel):
+    # extra="forbid" adds "additionalProperties": false to the schema (required by Groq's strict mode).
+    model_config = ConfigDict(extra="forbid")
+
     intents: List[str]
     issue_type: str
     priority: Literal["Low", "Medium", "High", "Critical"]
     entities: List[str]
+
+
+def chat(system_prompt, user_prompt, schema=None):
+    """Send one system + user message to the active backend and return the reply text.
+
+    If a JSON schema is given, the model is forced to answer with JSON in exactly that shape.
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    if PROVIDER == "groq":
+        request = {
+            "model": MODEL_NAME,
+            "messages": messages,
+            "temperature": 0,             # same input -> same output
+            "reasoning_effort": "low",    # gpt-oss thinks before answering; keep it short
+            "include_reasoning": False,   # do not send the thinking text back
+        }
+        if schema is not None:
+            request["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "extraction", "strict": True, "schema": schema},
+            }
+        response = groq_client.chat.completions.create(**request)
+        return response.choices[0].message.content
+
+    # Local Ollama backend
+    response = ollama.chat(
+        model=MODEL_NAME,
+        messages=messages,
+        format=schema,      # None = free text; a schema = JSON in exactly that shape
+        think=False,        # skip Qwen's long "thinking" step
+        options={
+            "temperature": 0,   # same input -> same output
+            "num_ctx": 4096,    # small context window to save RAM on 8 GB
+        },
+    )
+    return response.message.content
 
 
 def build_system_prompt(intent_descriptions):
@@ -61,20 +116,11 @@ def build_system_prompt(intent_descriptions):
 
 def extract(message, intent_descriptions):
     """Send one customer message to the model and return an Extraction object."""
-    response = ollama.chat(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": build_system_prompt(intent_descriptions)},
-            {"role": "user", "content": message},
-        ],
-        format=Extraction.model_json_schema(),  # force valid JSON in our shape
-        think=False,                            # skip Qwen's long "thinking" step
-        options={
-            "temperature": 0,   # same input -> same output
-            "num_ctx": 4096,    # small context window to save RAM on 8 GB
-        },
+    raw_json = chat(
+        build_system_prompt(intent_descriptions),
+        message,
+        schema=Extraction.model_json_schema(),  # force valid JSON in our shape
     )
-    raw_json = response.message.content
     result = Extraction.model_validate_json(raw_json)
     return result
 
@@ -102,19 +148,8 @@ def generate_response(message, chunks, routing, suggested_action):
         "POLICY:\n" + policy_text
     )
 
-    response = ollama.chat(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        think=False,
-        options={
-            "temperature": 0,
-            "num_ctx": 4096,
-        },
-    )
-    return response.message.content.strip()
+    reply = chat(system_prompt, user_prompt)
+    return reply.strip()
 
 
 if __name__ == "__main__":
@@ -128,6 +163,7 @@ if __name__ == "__main__":
         "Complaint": "Customer is angry or threatens to escalate.",
         "Unclear": "Too vague to understand.",
     }
+    print("Provider:", PROVIDER, "| Model:", MODEL_NAME)
     result = extract(test_message, test_intents)
     print(result.model_dump_json(indent=2))
 

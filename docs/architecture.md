@@ -41,6 +41,8 @@ flowchart TD
 
 The decision layer (`decision.py`) sits between reasoning and retrieval: the LLM **extracts**, deterministic rules **decide**.
 
+**Two backends.** The diagram shows local mode. With `LLM_PROVIDER=groq`, `llm.py` calls `openai/gpt-oss-20b` on Groq (strict JSON schema), and `retriever.py` uses `bge-small-en-v1.5` in-process (fastembed) with an in-memory search instead of Ollama + Chroma. The decision rules, prompts, logging and API are identical in both modes. The React web app in `frontend/` calls the same API.
+
 ## Deployment
 
 ```mermaid

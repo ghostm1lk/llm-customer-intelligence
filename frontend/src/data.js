@@ -84,4 +84,4 @@ export const METRICS = [
   { value: "100%", label: "Same input, same output" },
 ];
 
-export const GITHUB_URL = "https://github.com/ghostm1lk/task3_project";
+export const GITHUB_URL = "https://github.com/ghostm1lk/llm-customer-intelligence";

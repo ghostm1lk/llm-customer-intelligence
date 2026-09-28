@@ -8,3 +8,7 @@ eval/
 .git/
 .DS_Store
 .vscode/
+
+# Downloaded embedding model (the image downloads its own copy during the build)
+models_cache/
+frontend/

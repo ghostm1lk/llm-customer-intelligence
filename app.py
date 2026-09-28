@@ -15,6 +15,7 @@ Then open http://127.0.0.1:8000/docs
 """
 
 import os
+import threading
 import time
 from typing import List
 
@@ -25,10 +26,17 @@ from pydantic import BaseModel, Field
 from decision import load_config
 from llm import MODEL_NAME, PROVIDER
 from pipeline import process
+from retriever import build_index
 
 
 # Load the rules once when the server starts, not on every request.
 config = load_config()
+
+# Hosted mode: build the in-memory search index in the background as soon as the server starts,
+# so the first visitor does not wait for it. (Local mode keeps its index in chroma_db/ on disk.)
+# ponytail: a request that arrives before this finishes builds the index itself; no lock needed at this size.
+if PROVIDER == "groq":
+    threading.Thread(target=build_index, daemon=True).start()
 
 app = FastAPI(
     title="Customer Intelligence API",

@@ -154,7 +154,8 @@ def get_embedder():
     """Load the small embedding model once (downloads ~130 MB the very first time)."""
     global embedder  # "global" = change the variable defined outside this function
     if embedder is None:
-        embedder = TextEmbedding(model_name=EMBED_MODEL, cache_dir=MODEL_CACHE_DIR)
+        # threads=1: small hosting plans have a fraction of one CPU; more threads only compete.
+        embedder = TextEmbedding(model_name=EMBED_MODEL, cache_dir=MODEL_CACHE_DIR, threads=1)
     return embedder
 
 

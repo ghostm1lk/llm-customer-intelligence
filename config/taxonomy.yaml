@@ -1,5 +1,4 @@
-# Intent taxonomy: every intent the model is allowed to pick, and the team it routes to.
-# "null" means the intent does not decide routing on its own (it only adds context).
+# intent -> team. null means the intent doesn't decide routing by itself.
 intents:
   Fraud Report: Fraud Team
   Unauthorized Transaction: Fraud Team
@@ -13,8 +12,7 @@ intents:
   Complaint: null
   Unclear: null
 
-# One-line definition per intent. These go into the LLM prompt so the model knows
-# where one intent ends and the next begins. Keep the names identical to the list above.
+# definitions that go into the extraction prompt. names must match the list above.
 intent_descriptions:
   Fraud Report: Customer suspects fraud, a scam or phishing, a stolen card or stolen card details, or someone trying to trick them.
   Unauthorized Transaction: A specific transaction the customer says they did NOT make or approve (unknown merchant, place or withdrawal). A duplicate of a purchase they did make is NOT this.
@@ -28,17 +26,17 @@ intent_descriptions:
   Complaint: Only when the customer EXPLICITLY shows anger or frustration (e.g. "unacceptable", "ridiculous", "third time"), complains about service or staff, or threatens to escalate. A problem described calmly is NOT a complaint.
   Unclear: Use ONLY when no other intent fits because the message is too vague or incomplete to know what the customer wants. Never combine Unclear with another intent.
 
-# When a message has intents for several teams, the first team in this list wins.
+# if a message points to several teams, the first one here wins
 team_order:
   - Fraud Team
   - Billing Department
   - Account Services
   - Support Team
 
-# Used when no intent maps to a team (e.g. only "Complaint" or "Unclear").
+# fallback when no intent maps to a team (only Complaint or Unclear)
 default_team: Support Team
 
-# Rules for the suggested action.
+# action rules
 escalate_teams: [Fraud Team]
 escalate_priorities: [High, Critical]
 unclear_intent: Unclear

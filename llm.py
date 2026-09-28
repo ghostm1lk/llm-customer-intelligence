@@ -1,14 +1,11 @@
 """
-llm.py - talks to the language model. Two backends, chosen with the LLM_PROVIDER setting:
+llm calls: extraction and reply generation.
 
-    LLM_PROVIDER=ollama (default)  local Qwen3.5-4B in Ollama - no data leaves the machine
-    LLM_PROVIDER=groq              hosted model on Groq's API - used for the public demo
+LLM_PROVIDER picks the backend:
+    ollama (default)  qwen3.5:4b running locally
+    groq              hosted model, used for the public demo (needs GROQ_API_KEY)
 
-Before running (ollama):  ollama pull qwen3.5:4b
-Before running (groq):    export LLM_PROVIDER=groq  and  export GROQ_API_KEY=...
-
-Run the self-check:
-    python llm.py
+self-check: python llm.py
 """
 
 import os
@@ -17,13 +14,12 @@ from typing import List, Literal
 from pydantic import BaseModel, ConfigDict
 
 
-# Read the settings from environment variables (outside the code), with safe defaults.
 PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 
 if PROVIDER == "groq":
     from groq import Groq
     MODEL_NAME = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-    groq_client = Groq()  # reads GROQ_API_KEY from the environment; fails clearly if it is missing
+    groq_client = Groq()  # picks up GROQ_API_KEY from the environment
 elif PROVIDER == "ollama":
     import ollama
     MODEL_NAME = "qwen3.5:4b"
@@ -31,10 +27,9 @@ else:
     raise ValueError("LLM_PROVIDER must be 'ollama' or 'groq', not: " + PROVIDER)
 
 
-# This class describes the exact JSON shape we want back from the model.
-# Pydantic turns it into a JSON schema, and the model is forced to follow it.
+# the model's output is constrained to this schema
 class Extraction(BaseModel):
-    # extra="forbid" adds "additionalProperties": false to the schema (required by Groq's strict mode).
+    # groq's strict mode needs additionalProperties: false
     model_config = ConfigDict(extra="forbid")
 
     intents: List[str]
@@ -44,10 +39,7 @@ class Extraction(BaseModel):
 
 
 def chat(system_prompt, user_prompt, schema=None):
-    """Send one system + user message to the active backend and return the reply text.
-
-    If a JSON schema is given, the model is forced to answer with JSON in exactly that shape.
-    """
+    """send a system + user prompt to the active backend, optionally forcing a json schema."""
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -57,9 +49,9 @@ def chat(system_prompt, user_prompt, schema=None):
         request = {
             "model": MODEL_NAME,
             "messages": messages,
-            "temperature": 0,             # same input -> same output
-            "reasoning_effort": "low",    # gpt-oss thinks before answering; keep it short
-            "include_reasoning": False,   # do not send the thinking text back
+            "temperature": 0,
+            "reasoning_effort": "low",    # gpt-oss reasons before answering, keep it short
+            "include_reasoning": False,
         }
         if schema is not None:
             request["response_format"] = {
@@ -69,23 +61,21 @@ def chat(system_prompt, user_prompt, schema=None):
         response = groq_client.chat.completions.create(**request)
         return response.choices[0].message.content
 
-    # Local Ollama backend
     response = ollama.chat(
         model=MODEL_NAME,
         messages=messages,
-        format=schema,      # None = free text; a schema = JSON in exactly that shape
-        think=False,        # skip Qwen's long "thinking" step
+        format=schema,
+        think=False,        # thinking mode only adds latency for extraction
         options={
-            "temperature": 0,   # same input -> same output
-            "num_ctx": 4096,    # small context window to save RAM on 8 GB
+            "temperature": 0,
+            "num_ctx": 4096,    # keeps memory low on an 8 GB machine
         },
     )
     return response.message.content
 
 
 def build_system_prompt(intent_descriptions):
-    """Build the instructions for the model, including each allowed intent and its definition."""
-    # One line per intent, e.g. "- Billing Issue: Wrong, duplicate or unexpected charges..."
+    """extraction prompt, with every allowed intent and its definition from the taxonomy."""
     intent_lines = ""
     for name in intent_descriptions:
         intent_lines = intent_lines + "- " + name + ": " + intent_descriptions[name] + "\n"
@@ -115,19 +105,18 @@ def build_system_prompt(intent_descriptions):
 
 
 def extract(message, intent_descriptions):
-    """Send one customer message to the model and return an Extraction object."""
+    """intents, issue type, priority and entities for one message."""
     raw_json = chat(
         build_system_prompt(intent_descriptions),
         message,
-        schema=Extraction.model_json_schema(),  # force valid JSON in our shape
+        schema=Extraction.model_json_schema(),
     )
     result = Extraction.model_validate_json(raw_json)
     return result
 
 
 def generate_response(message, chunks, routing, suggested_action):
-    """Write a short reply to the customer, grounded ONLY in the retrieved policy chunks."""
-    # Put each retrieved chunk on its own line, labelled with the file it came from.
+    """short reply to the customer, using only the retrieved policy chunks."""
     policy_text = ""
     for chunk in chunks:
         policy_text = policy_text + "[" + chunk["source"] + "] " + chunk["text"] + "\n"
@@ -167,7 +156,7 @@ if __name__ == "__main__":
     result = extract(test_message, test_intents)
     print(result.model_dump_json(indent=2))
 
-    # Minimal check: the model must detect a High or Critical priority here.
+    # the pdf example is an angry customer, so anything below High is wrong
     assert result.priority in ["High", "Critical"], "Priority should be High or Critical"
     assert len(result.intents) > 0, "At least one intent should be detected"
     print("Self-check passed.")

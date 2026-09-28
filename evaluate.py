@@ -1,26 +1,16 @@
 """
-evaluate.py - Evaluation (PDF §10).
+evaluation over the labeled dataset in data/messages.jsonl.
 
-Runs the full pipeline on every labeled message in data/messages.jsonl and measures:
+measures:
+    output quality   intent exact match + precision/recall/f1, priority, routing,
+                     action accuracy, completeness
+    retrieval        hit@1 / hit@3 against the labeled docs
+    groundedness     reply cites a source, and has no numbers that aren't in the
+                     retrieved policy text or the message
+    consistency      same message 3x -> same output, reworded message -> same decision
 
-  1. Output quality (§10.1)
-       - intent exact match, and intent precision / recall / F1
-       - priority, routing and suggested_action accuracy
-       - completeness of the structured output
-  2. Retrieval quality (§10.2)
-       - hit@1 and hit@3: is a labeled document among the top retrieved chunks?
-       - groundedness: does the reply cite a source, and are all its numbers found
-         in the retrieved policy text (or the customer's own message)?
-  3. Consistency (§10.3)
-       - same input run several times -> same output?
-       - reworded input -> same routing and action?
-
-Writes:
-    eval/results.jsonl   one line per message: expected vs predicted
-    eval/summary.json    all the numbers
-
-Usage (takes roughly 10-15 minutes on an M2 MacBook Air):
-    python evaluate.py
+writes eval/results.jsonl (per message) and eval/summary.json.
+takes ~10-15 min on an m2 air: python evaluate.py
 """
 
 import json
@@ -36,12 +26,11 @@ from retriever import retrieve
 
 RESULTS_DIR = "eval"
 
-# Consistency: each of these messages is run this many times in total.
+# consistency: these messages are run CONSISTENCY_RUNS times each
 CONSISTENCY_RUNS = 3
 CONSISTENCY_IDS = ["M001", "M004", "M011", "M015", "M019", "M028", "M035", "M044", "M049", "M057"]
 
-# Robustness: reworded versions of dataset messages. The system should give the
-# same routing and suggested_action as the original message's labels.
+# robustness: rewordings of dataset messages, should get the original's routing and action
 ROBUSTNESS_CASES = [
     ("M001", "i got charged 2 times for one purchase!! fix it now or im escalating"),
     ("M011", "Someone bought something for 350 JOD with my card on a site I don't know. It wasn't me."),
@@ -54,10 +43,10 @@ ROBUSTNESS_CASES = [
 ]
 
 
-# ---------------------------------------------------------------- small helpers
+# ---- helpers
 
 def percent(part, total):
-    """Return e.g. '45/60 (75.0%)'."""
+    # e.g. "45/60 (75.0%)"
     if total == 0:
         return "0/0 (n/a)"
     value = round(100 * part / total, 1)
@@ -65,7 +54,6 @@ def percent(part, total):
 
 
 def compare_intents(expected, predicted):
-    """Count true positives, false positives and false negatives for one message."""
     true_pos = 0
     false_pos = 0
     false_neg = 0
@@ -81,7 +69,6 @@ def compare_intents(expected, predicted):
 
 
 def is_complete(result):
-    """True if every field of the PDF §5 output is present and not empty."""
     required = ["intents", "issue_type", "priority", "routing", "suggested_action", "response"]
     for field in required:
         if field not in result:
@@ -92,12 +79,12 @@ def is_complete(result):
 
 
 def find_numbers(text):
-    """Return every number in the text, e.g. 'within 24 hours, 5.5%' -> ['24', '5.5']."""
+    # "within 24 hours, 5.5%" -> ["24", "5.5"]
     return re.findall(r"\d+(?:\.\d+)?", text)
 
 
 def ungrounded_numbers(response, message, chunks):
-    """Numbers in the reply that appear neither in the retrieved policy text nor in the message."""
+    """numbers in the reply that aren't in the retrieved policy text or the message itself."""
     allowed_text = message
     for chunk in chunks:
         allowed_text = allowed_text + " " + chunk["text"]
@@ -111,17 +98,15 @@ def ungrounded_numbers(response, message, chunks):
 
 
 def cites_a_source(response, sources):
-    """True if the reply mentions at least one retrieved file, e.g. [fees_and_charges.md]."""
     for source in sources:
         if source in response:
             return True
     return False
 
 
-# ---------------------------------------------------------------- 1. output quality
+# ---- output quality
 
 def evaluate_dataset(messages, config):
-    """Run every message through the pipeline and compare with the labels."""
     rows = []
     counter = 0
     for message in messages:
@@ -164,9 +149,9 @@ def evaluate_dataset(messages, config):
             "requires_retrieval": message["requires_retrieval"],
         }
 
-        # Groundedness: only for replies that actually used retrieved policy text.
+        # groundedness only makes sense when policy text was actually used
         if len(row["sources"]) > 0:
-            chunks = retrieve(message["text"])  # same query -> same chunks the pipeline used
+            chunks = retrieve(message["text"])  # deterministic, same chunks as the pipeline got
             row["cites_source"] = cites_a_source(row["response"], row["sources"])
             row["ungrounded_numbers"] = ungrounded_numbers(row["response"], message["text"], chunks)
         else:
@@ -178,7 +163,6 @@ def evaluate_dataset(messages, config):
 
 
 def summarize_quality(rows):
-    """Turn the per-message rows into the §10.1 and groundedness numbers."""
     total = len(rows)
     counts = {"exact": 0, "priority": 0, "routing": 0, "action": 0, "complete": 0, "errors": 0}
     tp = 0
@@ -214,9 +198,15 @@ def summarize_quality(rows):
             if len(row["ungrounded_numbers"]) == 0:
                 no_invented_numbers = no_invented_numbers + 1
 
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    precision = 0
+    if tp + fp > 0:
+        precision = tp / (tp + fp)
+    recall = 0
+    if tp + fn > 0:
+        recall = tp / (tp + fn)
+    f1 = 0
+    if precision + recall > 0:
+        f1 = 2 * precision * recall / (precision + recall)
 
     summary = {
         "messages": total,
@@ -237,10 +227,9 @@ def summarize_quality(rows):
     return summary
 
 
-# ---------------------------------------------------------------- 2. retrieval quality
+# ---- retrieval quality
 
 def evaluate_retrieval(messages):
-    """For every message with a labeled document, check whether retrieval finds it."""
     total = 0
     hit_at_1 = 0
     hit_at_3 = 0
@@ -279,10 +268,9 @@ def evaluate_retrieval(messages):
     }
 
 
-# ---------------------------------------------------------------- 3. consistency
+# ---- consistency and robustness
 
 def key_fields(result):
-    """The fields that must stay the same between runs."""
     return {
         "intents": sorted(result["intents"]),
         "priority": result["priority"],
@@ -292,7 +280,6 @@ def key_fields(result):
 
 
 def evaluate_consistency(messages_by_id, config):
-    """Run selected messages several times; count how many give identical key fields every time."""
     stable = 0
     unstable_ids = []
     for message_id in CONSISTENCY_IDS:
@@ -315,7 +302,6 @@ def evaluate_consistency(messages_by_id, config):
 
 
 def evaluate_robustness(messages_by_id, config):
-    """Reworded messages should get the same routing and action as the original's labels."""
     passed = 0
     failures = []
     for original_id, reworded in ROBUSTNESS_CASES:
@@ -339,7 +325,7 @@ def evaluate_robustness(messages_by_id, config):
     }
 
 
-# ---------------------------------------------------------------- main
+# ---- main
 
 if __name__ == "__main__":
     config = load_config()

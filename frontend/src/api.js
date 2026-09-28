@@ -1,6 +1,4 @@
-// Talks to the FastAPI backend.
-// In production VITE_API_URL is the API's address (set on Render when building the static site).
-// In development it is empty, and Vite forwards the requests to http://127.0.0.1:8000.
+// VITE_API_URL is set at build time on render. empty in dev, where vite proxies to :8000
 const API_URL = import.meta.env.VITE_API_URL || "";
 
 export async function checkHealth() {

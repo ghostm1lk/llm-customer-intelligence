@@ -1,10 +1,8 @@
 """
-pipeline.py - runs one customer message through the whole system.
+runs one message through the full pipeline:
+extract -> decide -> retrieve -> respond.
 
-    message -> LLM extraction -> rule-based decision -> retrieval -> grounded response -> final JSON
-
-Usage:
-    python pipeline.py "I was charged twice for the same transaction"
+usage: python pipeline.py "I was charged twice for the same transaction"
 """
 
 import json
@@ -18,14 +16,14 @@ from retriever import retrieve
 
 
 def process(message, config):
-    """Run the pipeline on one message, time it, and log it (including failures)."""
+    """run_pipeline plus timing and logging. failures are logged too."""
     start = time.perf_counter()
     try:
         result = run_pipeline(message, config)
     except Exception as error:
         latency = time.perf_counter() - start
         log_request(message, None, latency, MODEL_NAME, error=repr(error))
-        raise  # still crash loudly after logging, so the problem is not hidden
+        raise
 
     latency = time.perf_counter() - start
     log_request(message, result, latency, MODEL_NAME)
@@ -33,15 +31,12 @@ def process(message, config):
 
 
 def run_pipeline(message, config):
-    """Process one message and return the combined result as a dictionary."""
-    # 1. Understanding layer (LLM)
     extraction = extract(message, config["intent_descriptions"])
     extraction.intents = clean_intents(extraction.intents, config)
 
-    # 2. Decision layer (rules)
     decision = decide(extraction.intents, extraction.priority, config)
 
-    # 3. Knowledge layer (RAG): skip retrieval when we don't know what the customer wants.
+    # nothing useful to retrieve if we don't know what the customer wants yet
     if decision["suggested_action"] == "Request more info":
         chunks = []
     else:
@@ -51,14 +46,12 @@ def run_pipeline(message, config):
         message, chunks, decision["routing"], decision["suggested_action"]
     )
 
-    # List each source file once, in the order it was retrieved.
     sources = []
     for chunk in chunks:
         if chunk["source"] not in sources:
             sources.append(chunk["source"])
 
-    # Combine everything into the final output (PDF §5).
-    result = extraction.model_dump()          # Pydantic object -> dictionary
+    result = extraction.model_dump()
     result["routing"] = decision["routing"]
     result["suggested_action"] = decision["suggested_action"]
     result["response"] = response

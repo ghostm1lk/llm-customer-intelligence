@@ -52,11 +52,19 @@ flowchart LR
         A1["API container<br/>docker run -p 8000:8000"]
         A1 -- "host.docker.internal:11434" --> O1
     end
-    subgraph SRV ["Server (docker compose)"]
+    subgraph SRV ["On-premise server (docker compose)"]
         O2["ollama container<br/>(GPU)"]
         A2["api container"]
         A2 -- "ollama:11434" --> O2
     end
+    subgraph RND ["Public demo (Render, free plan)"]
+        W["Static site<br/>React web app<br/>customer-intel-cgsp.onrender.com"]
+        A3["Web service (Docker)<br/>API + fastembed<br/>customer-intel-w6ht.onrender.com"]
+        W -- "VITE_API_URL<br/>(allowed by CORS)" --> A3
+    end
+    A3 -- "GROQ_API_KEY" --> G["Groq API<br/>openai/gpt-oss-20b"]
 ```
+
+The public demo uses `LLM_PROVIDER=groq`, so its API container needs no GPU and fits Render's free plan (512 MB RAM). The web app is served separately as static files, so it loads instantly even while the API is waking up from sleep.
 
 The model always runs as a **separate service** from the API: the API image stays small, the model can use a GPU, and either can be updated or scaled without rebuilding the other. The API only needs the `OLLAMA_HOST` environment variable to find it.

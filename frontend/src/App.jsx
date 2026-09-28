@@ -7,14 +7,14 @@ import Composer from "./components/Composer";
 import ResultPanel from "./components/ResultPanel";
 import HowItWorks from "./components/HowItWorks";
 
-// On phones and small tablets the analysis panel is below the input form.
+// on narrow screens the analysis panel sits below the form
 function scrollToAnalysisOnSmallScreens() {
   if (window.innerWidth < 1024) {
     document.getElementById("analysis").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
-// Turn an API error into a sentence a visitor understands.
+// api error -> something a visitor can read
 function errorText(status, data) {
   if (status === 429) {
     return data.detail || "Too many requests. Please wait a minute and try again.";
@@ -40,9 +40,8 @@ export default function App() {
   const [modelName, setModelName] = useState("");
   const stepTimer = useRef(null);
 
-  // ---------------------------------------------------------------- wake the API on page load
-  // The free server sleeps when idle. Pinging /health as soon as the page opens starts waking it,
-  // so it is usually ready by the time the visitor has picked an example.
+  // the free render instance sleeps when idle. pinging /health on load starts waking it
+  // up, so it's usually ready by the time someone picks an example.
   useEffect(function () {
     let cancelled = false;
     const startedAt = Date.now();
@@ -61,7 +60,7 @@ export default function App() {
         .catch(function () {
           if (cancelled) { return; }
           if (Date.now() - startedAt < 120000) {
-            setTimeout(tryHealth, 3000); // keep trying for up to 2 minutes
+            setTimeout(tryHealth, 3000);
           } else {
             setApiState("down");
           }
@@ -75,7 +74,7 @@ export default function App() {
     };
   }, []);
 
-  // ---------------------------------------------------------------- analysis
+
   async function runAnalysis(text) {
     const trimmed = text.trim();
     if (trimmed === "" || status === "loading") {
@@ -87,14 +86,13 @@ export default function App() {
     setSlow(false);
     setActiveStep(0);
 
-    // The server does not report progress, so we step through the pipeline while waiting.
+    // the api doesn't report progress, so the steps are just animated while we wait
     clearInterval(stepTimer.current);
     stepTimer.current = setInterval(function () {
       setActiveStep(function (step) { return step < STEPS.length - 1 ? step + 1 : step; });
     }, 900);
     const slowTimer = setTimeout(function () { setSlow(true); }, 8000);
 
-    // On phones the results are below the input: bring them into view.
     scrollToAnalysisOnSmallScreens();
 
     const startedAt = performance.now();
@@ -117,7 +115,7 @@ export default function App() {
       setError(errorText(outcome.status, outcome.data));
       setStatus("error");
     }
-    // Scroll again once the result is on screen (the layout height changed while loading).
+    // scroll again, the layout height changed while loading
     setTimeout(scrollToAnalysisOnSmallScreens, 50);
   }
 
@@ -126,13 +124,12 @@ export default function App() {
     runAnalysis(text);
   }
 
-  // ---------------------------------------------------------------- page
+
   return (
     <div id="top">
       <Header apiState={apiState} />
 
       <main className="mx-auto max-w-6xl px-5">
-        {/* Hero */}
         <section className="pt-14 pb-10 sm:pt-20">
           <div className="max-w-3xl">
             <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
@@ -155,7 +152,6 @@ export default function App() {
           </div>
         </section>
 
-        {/* Demo */}
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[5fr_7fr]">
           <Composer
             message={message}

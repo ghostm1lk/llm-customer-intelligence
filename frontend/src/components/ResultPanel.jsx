@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { STEPS } from "../data";
 
-// ---------------------------------------------------------------- styles per value
+// ---- styles
 
 const PRIORITY_STYLES = {
   Low: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-400/20",
@@ -42,7 +42,7 @@ const ACTIONS = {
   },
 };
 
-// ---------------------------------------------------------------- small building blocks
+// ---- building blocks
 
 function Badge({ className, children }) {
   return (
@@ -75,7 +75,7 @@ function prettySource(filename) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// ---------------------------------------------------------------- pipeline steps
+// ---- pipeline steps
 
 export function PipelineSteps({ activeStep, isDone }) {
   return (
@@ -110,12 +110,12 @@ export function PipelineSteps({ activeStep, isDone }) {
   );
 }
 
-// ---------------------------------------------------------------- the reply with citations
+// ---- reply with citations
 
 function ReplyCard({ text }) {
   const [copied, setCopied] = useState(false);
 
-  // Split "…within 24 hours [duplicate_charges.md]." into text parts and citation parts.
+  // "…within 24 hours [duplicate_charges.md]." -> text and citation parts
   const parts = text.split(/(\[[a-z0-9_]+\.md\])/g);
   const plainText = text.replace(/\s*\[[a-z0-9_]+\.md\]/g, "");
 
@@ -156,7 +156,7 @@ function ReplyCard({ text }) {
   );
 }
 
-// ---------------------------------------------------------------- panel states
+// ---- panel states
 
 function EmptyState() {
   return (
@@ -305,7 +305,7 @@ function Result({ result, seconds }) {
   );
 }
 
-// ---------------------------------------------------------------- the panel
+// ---- panel
 
 export default function ResultPanel({ status, result, error, seconds, activeStep, slow }) {
   return (

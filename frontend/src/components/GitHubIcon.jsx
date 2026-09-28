@@ -1,4 +1,4 @@
-// GitHub mark (the icon library no longer ships brand logos).
+// lucide dropped brand icons, so the github mark is inlined
 export default function GitHubIcon({ className }) {
   return (
     <svg viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">

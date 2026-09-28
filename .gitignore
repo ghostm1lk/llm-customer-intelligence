@@ -1,22 +1,22 @@
-# Virtual environment (recreate with: python3 -m venv .venv && pip install -r requirements.txt)
+# virtualenv
 .venv/
 
-# Python cache files
+# python cache
 __pycache__/
 *.pyc
 
-# Vector database (rebuilt automatically from data/kb/ by retriever.py)
+# vector db, rebuilt from data/kb/
 chroma_db/
 
-# Request logs (can contain customer messages - never commit these)
+# request logs contain customer messages
 logs/
 
-# macOS / editor files
+# os / editor
 .DS_Store
 .vscode/
 
-# Downloaded embedding model for hosted mode (re-downloads automatically)
+# fastembed model cache
 models_cache/
 
-# Local secrets (API keys) - never commit
+# secrets
 .env

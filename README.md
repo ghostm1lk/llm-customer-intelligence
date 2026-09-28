@@ -4,6 +4,12 @@ An AI assistant for bank customer-service teams. It reads a customer message and
 
 Built for the PIO-TECH Internship Program (Task 3). Runs **fully locally** with a small open-source LLM (Qwen3.5-4B via Ollama), or on a **hosted LLM** (Groq) for the public web demo — switched with one setting.
 
+### 🔗 [Try the live demo](https://customer-intel-cgsp.onrender.com)
+
+**Web app:** https://customer-intel-cgsp.onrender.com · **API docs:** https://customer-intel-w6ht.onrender.com/docs
+
+> Hosted on Render's free plan: if nobody has used it for 15 minutes, the first request takes up to a minute while the server wakes up. After that, answers take a few seconds.
+
 ```text
 Input:  "I was charged twice for the same transaction and I need this resolved immediately. If not, I will escalate."
 ```
@@ -140,7 +146,45 @@ curl -X POST http://127.0.0.1:8000/process-customer-message \
 | 429 | Rate limit reached (5 per minute / 50 per day per visitor, 400 per day in total) |
 | 503 | Model service unavailable (e.g. Ollama not running) |
 
-## Docker
+## Live deployment (Render)
+
+The public demo runs as **two Render services**, both on the free plan, built from this repository:
+
+```text
+ Visitor's browser
+   │ 1. loads the page              │ 2. sends the message
+   ▼                                ▼
+ Static Site                        Web Service (Docker)                     Groq API
+ customer-intel-cgsp.onrender.com   customer-intel-w6ht.onrender.com   ──►   openai/gpt-oss-20b
+ frontend/ built to HTML/CSS/JS     app.py: rules, retrieval (fastembed),
+ served from a CDN, never sleeps    logging, rate limits
+```
+
+| | Static site (web app) | Web service (API) |
+|---|---|---|
+| Source | `frontend/` | repository root (`Dockerfile`) |
+| Build | `npm install && npm run build` → publish `dist` | Docker image; the embedding model is downloaded during the build |
+| Environment | `VITE_API_URL` = API address, `NODE_VERSION` = `22` | `LLM_PROVIDER` = `groq`, `GROQ_API_KEY` = secret, `ALLOWED_ORIGINS` = web app address |
+| Health check | – | `/health` |
+
+**Why two services?** The web app is just static files, so it loads instantly from a CDN even when the API is asleep. It pings `/health` as soon as it opens, which wakes the API while the visitor reads the page, and shows a "Waking up server…" status until it is ready.
+
+**How they connect:** the web app knows the API's address from `VITE_API_URL` (baked in at build time), and the API only accepts browser requests from the addresses in `ALLOWED_ORIGINS` (CORS).
+
+**Deploying changes:** pushing to `main` redeploys both services automatically. After changing `VITE_API_URL`, the static site must be rebuilt (Manual Deploy), because the value is compiled into the page.
+
+**Free-plan constraints and how they are handled:**
+
+| Constraint | Handling |
+|---|---|
+| 512 MB RAM, 0.1 CPU | hosted mode skips Ollama and Chroma; a small embedding model (bge-small, ~67 MB) runs on 1 thread with an in-memory search over 71 chunks |
+| Sleeps after 15 min idle | web app wakes the API on page load and explains the wait |
+| No persistent disk | embedding model is baked into the Docker image; the search index is rebuilt in memory at startup |
+| Free Groq quota | per-visitor and global rate limits in `app.py` |
+
+The Groq API key exists only in Render's environment settings, never in the repository.
+
+## Docker (self-hosted)
 
 The model runs as a separate service (Ollama); the container holds the API, rules, knowledge base and vector database.
 
@@ -224,7 +268,7 @@ Full results, the three improvement iterations, error analysis and limitations: 
 | §8 Modular pipeline | see [docs/architecture.md](docs/architecture.md) |
 | §10 Evaluation | `evaluate.py`, [docs/evaluation_report.md](docs/evaluation_report.md) |
 | §11 REST API, Docker, observability | `app.py`, `Dockerfile`, `docker-compose.yml`, `logger.py` |
-| Extra: interactive web app | `frontend/` |
+| Extra: interactive web app, deployed | `frontend/`, [live demo](https://customer-intel-cgsp.onrender.com) |
 | §12 Deliverables | this repository |
 
 ## Author

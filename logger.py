@@ -1,10 +1,5 @@
 """
-logger.py - the Logging Layer.
-
-Appends one JSON line per request to logs/requests.jsonl:
-    time, input message, full output (or the error), latency in seconds, model name.
-
-Covers PDF §6 "Logging of all requests and outputs" and §11 "log inputs, outputs, latency".
+request log: one json line per request in logs/requests.jsonl.
 """
 
 import json
@@ -17,8 +12,7 @@ LOG_PATH = os.path.join(LOG_DIR, "requests.jsonl")
 
 
 def log_request(message, result, latency_seconds, model, error=None):
-    """Append one request (successful or failed) to the log file."""
-    os.makedirs(LOG_DIR, exist_ok=True)  # create logs/ the first time; do nothing if it exists
+    os.makedirs(LOG_DIR, exist_ok=True)
 
     entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -28,5 +22,5 @@ def log_request(message, result, latency_seconds, model, error=None):
         "output": result,
         "error": error,
     }
-    with open(LOG_PATH, "a") as file:  # "a" = append: add to the end, never overwrite
+    with open(LOG_PATH, "a") as file:
         file.write(json.dumps(entry) + "\n")

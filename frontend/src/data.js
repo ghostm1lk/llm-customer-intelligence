@@ -1,4 +1,4 @@
-// Content shown on the page, kept separate from the layout so it is easy to edit.
+// page copy lives here so it can be edited without touching the components
 import {
   Brain,
   CreditCard,

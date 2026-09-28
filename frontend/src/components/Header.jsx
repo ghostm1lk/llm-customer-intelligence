@@ -1,7 +1,7 @@
 import { GITHUB_URL } from "../data";
 import GitHubIcon from "./GitHubIcon";
 
-// Small pill in the top bar that tells the visitor whether the API is ready.
+// top-right pill showing whether the api is awake
 function ApiStatus({ apiState }) {
   let dot = "bg-slate-400";
   let label = "Connecting…";

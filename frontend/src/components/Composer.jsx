@@ -25,7 +25,7 @@ export default function Composer({ message, setMessage, onAnalyze, onPickExample
   const canSubmit = message.trim().length > 0 && !isLoading;
 
   function handleKeyDown(event) {
-    // Cmd+Enter (Mac) or Ctrl+Enter (Windows) submits the message.
+    // cmd/ctrl + enter submits
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canSubmit) {
       onAnalyze();
     }

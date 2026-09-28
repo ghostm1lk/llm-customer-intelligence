@@ -1,4 +1,4 @@
-# Files Docker should NOT copy into the image (same idea as .gitignore).
+# kept out of the api image
 .venv/
 __pycache__/
 *.pyc
@@ -9,6 +9,5 @@ eval/
 .DS_Store
 .vscode/
 
-# Downloaded embedding model (the image downloads its own copy during the build)
 models_cache/
 frontend/

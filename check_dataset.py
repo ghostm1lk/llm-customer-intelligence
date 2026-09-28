@@ -1,8 +1,7 @@
 """
-check_dataset.py - checks data/messages.jsonl against the PDF's §7 requirements.
+checks data/messages.jsonl against the dataset requirements (size, ambiguous, retrieval).
 
-Run:
-    python check_dataset.py
+run: python check_dataset.py
 """
 
 import json
@@ -12,7 +11,6 @@ from decision import load_config
 
 
 def load_messages(path="data/messages.jsonl"):
-    """Read the JSONL file: one JSON object per line -> a list of dictionaries."""
     messages = []
     with open(path) as file:
         for line in file:
@@ -36,7 +34,7 @@ if __name__ == "__main__":
     intent_counts = {}
 
     for message in messages:
-        # Every label must be a real intent and every doc must exist.
+        # catch typos in labels and missing kb files
         for intent in message["intents"]:
             assert intent in config["intents"], message["id"] + ": unknown intent " + intent
             if intent not in intent_counts:

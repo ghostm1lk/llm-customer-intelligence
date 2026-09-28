@@ -1,18 +1,17 @@
-# Server deployment: the model server and the API as two containers.
+# self-hosted setup: ollama and the api as two containers.
 #
 #   docker compose up -d --build
 #   docker compose exec ollama ollama pull qwen3.5:4b
 #   docker compose exec ollama ollama pull nomic-embed-text
 #
-# On a Mac, do NOT use this file: Ollama inside Docker cannot use the Apple GPU.
-# Run the Ollama app natively and start only the API container (see README).
+# not for macs: ollama in docker can't use the apple gpu, run the ollama app natively instead.
 
 services:
   ollama:
     image: ollama/ollama
     volumes:
-      - ollama_models:/root/.ollama     # keep downloaded models between restarts
-    # Uncomment on a server with an NVIDIA GPU:
+      - ollama_models:/root/.ollama     # persist pulled models
+    # uncomment on a server with an nvidia gpu
     # deploy:
     #   resources:
     #     reservations:
@@ -26,7 +25,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OLLAMA_HOST=http://ollama:11434  # "ollama" = the service name above
+      - OLLAMA_HOST=http://ollama:11434  # service name from above
     depends_on:
       - ollama
 

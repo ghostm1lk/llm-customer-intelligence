@@ -2,8 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// During development (npm run dev), API calls are forwarded to the FastAPI server on port 8000,
-// so the frontend can use the same relative URLs as in production.
+// in dev, api calls are proxied to the fastapi server on :8000
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {

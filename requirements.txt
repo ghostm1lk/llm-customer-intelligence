@@ -1,6 +1,4 @@
-# Python packages for the customer intelligence system.
-# Install with: pip install -r requirements.txt
-# Also needed (not Python): Ollama, with `ollama pull qwen3.5:4b` and `ollama pull nomic-embed-text`
+# local mode also needs ollama with qwen3.5:4b and nomic-embed-text pulled
 ollama==0.6.2
 pydantic==2.13.5
 pyyaml==6.0.3
@@ -8,6 +6,6 @@ chromadb==1.5.9
 fastapi==0.141.1
 uvicorn==0.54.0
 
-# Hosted demo mode (LLM_PROVIDER=groq)
+# hosted mode (LLM_PROVIDER=groq)
 groq==1.7.0
 fastembed==0.8.1

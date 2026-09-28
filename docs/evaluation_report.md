@@ -64,9 +64,10 @@ Retrieval does not depend on the prompt, so its numbers are identical across ver
 *Effect:* the false *Complaint* labels on calm messages disappeared (precision 0.79 → 0.83) and priority improved (73% → 78%). The guard fixed a safety-critical error: a phishing victim (M012) labeled *Fraud Report + Unclear* had been sent "Request more info" instead of an escalation. But the *Unclear* wording over-corrected: the model started guessing intents for vague messages (M053, M057, M059), so routing dropped.
 
 **v2 → v3**
-- Reworded *Unclear* as a positive description of vague messages ("does not say what the problem is… do not guess an intent from a vague hint"), with examples that are **not** in the evaluation set.
+- Replaced the v2 prompt sentence "use *Unclear* only when no other intent fits" with "if the message does not say what the problem is, use *Unclear* instead of guessing".
+- The *Unclear* definition in `config/taxonomy.yaml` was left as in v2, so the prompt now contains both the new instruction and the older "only when no other intent fits" definition.
 
-*Effect:* routing recovered to 96.7% and exact match reached its best value (73.3%). One vague message (M053) is handled correctly again; three (M054, M057, M059) are still guessed.
+*Effect:* routing recovered to 96.7% and exact match reached its best value (73.3%). One vague message (M053) is handled correctly again; three (M054, M057, M059) are still guessed. The leftover v2 definition may be part of why: it still pushes the model to pick a real intent whenever one loosely fits.
 
 Tuning stopped after v3 on purpose: every prompt change was tested on the same 60 messages, so further tuning would overfit to this set (see §6).
 
@@ -110,6 +111,7 @@ M045 and M046 are arguably **label** problems rather than model errors: the prio
 
 - Build a separate held-out test set and re-measure.
 - Analyze the 8 retrieval misses; try larger chunks or adding the detected intent to the search query.
+- Rewrite the *Unclear* definition in the taxonomy to match the v3 instruction, e.g. "the message does not say what the problem is ('it broke again', 'can you check the issue'); don't guess an intent from a vague hint". This was prepared but not evaluated, and should be measured on a held-out set rather than the same 60 messages.
 - Few-shot examples in the extraction prompt (taken from outside the evaluation set) for vague messages.
 - Re-label priority with a second annotator using the written priority guide.
 - A larger model on a GPU server for better extraction, measured with the same `evaluate.py`.

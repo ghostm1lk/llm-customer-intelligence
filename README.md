@@ -229,7 +229,7 @@ The API finds the model through the `OLLAMA_HOST` environment variable.
 ## Evaluation
 
 ```bash
-caffeinate -i python evaluate.py     # ~15 min on a MacBook Air M2 (caffeinate keeps the Mac awake)
+python evaluate.py
 ```
 
 Final results (v3, local mode) on 60 labeled messages:
